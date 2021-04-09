@@ -1,4 +1,4 @@
-version: "3.5"
+version: "3.7"
 
 services:
   database:
@@ -19,3 +19,30 @@ services:
     ports:
       - 8080:8080
     restart: unless-stopped
+  
+  website:
+    image: nikolaik/python-nodejs:python3.8-nodejs14
+    depends_on:
+      - database
+    ports:
+      - 8000:8000
+    working_dir: /app
+    volumes:
+      - ./:/app
+    command:
+      - bash
+      - -c
+      - |
+        apt -y update
+        apt -y install binutils libproj-dev gdal-bin postgresql-client
+        pip install pipenv
+        cd /app
+        PGPASSWORD=access4all psql -h database -p 5432 -U access4all -w < /app/bin/create_db.sql
+        npm install
+        pipenv install --system --dev
+        set -a; source .env; set +a
+        python manage.py migrate
+        python manage.py createinitialrevisions
+        echo "from django.contrib.auth.models import User; User.objects.create_superuser('rootdev', 'root@dev.dev', 'rootdev')" | ./manage.py shell
+        python manage.py loaddata erp/fixtures/communes.json
+        npm run start:both
